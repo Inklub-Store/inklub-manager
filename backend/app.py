@@ -43,7 +43,9 @@ def create_app():
     # Allow cross-origin requests from the GitHub Pages frontend.
     # In production, replace "*" with your actual GitHub Pages URL,
     # e.g. "https://your-org.github.io"
-    CORS(app, origins=os.environ.get("ALLOWED_ORIGIN", "*"))
+    CORS(app,
+         origins=os.environ.get("ALLOWED_ORIGIN", "*"),
+         supports_credentials=True)
 
     # Register blueprints — each blueprint is a group of related routes.
     # The url_prefix makes all routes in that blueprint start with that path.
