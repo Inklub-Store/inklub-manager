@@ -39,6 +39,14 @@ def create_app():
     # Secret key is used to sign session cookies (login sessions).
     # MUST be set as an environment variable in production — never hardcode it.
     app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+    
+    # Session cookie settings — required for cross-origin requests.
+    # Since the frontend (GitHub Pages) and backend (Render) are on different
+    # domains, we need SameSite=None and Secure=True so the browser sends
+    # the session cookie with every API request.
+    app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+    app.config['SESSION_COOKIE_SECURE']   = True
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
 
     # Allow cross-origin requests from the GitHub Pages frontend.
     # In production, replace "*" with your actual GitHub Pages URL,
