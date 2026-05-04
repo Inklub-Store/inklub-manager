@@ -9,22 +9,23 @@
 //   - Updating item quantities
 //   - Updating minimum stock thresholds
 //   - Adding and deleting items
+//
+// FIX: Cancel button in add item form now correctly calls
+// window._invCancel instead of window.initInventory, which
+// was never exposed as a global and caused a silent failure.
+// Also added currentMarket variable so all handlers always
+// know which market is active without needing it passed in.
 // =============================================================
 
 import {
-  getInventory,
-  addInventoryItem,
-  updateItemQuantity,
-  updateItemThreshold,
-  deleteInventoryItem,
-  getCategories,
-  addCategory,
-  deleteCategory
+  getInventory, addInventoryItem, updateItemQuantity,
+  updateItemThreshold, deleteInventoryItem,
+  getCategories, addCategory, deleteCategory
 } from './api.js';
 
 
-// Track the active category filter
-let activeCategory = null; // null = show all
+// Track the active category filter (null = show all categories)
+let activeCategory = null;
 
 // Store categories so we can use them in forms without re-fetching
 let currentCategories = [];
@@ -32,15 +33,22 @@ let currentCategories = [];
 // Store items for filtering without re-fetching
 let currentItems = [];
 
+// Track the current market so cancel buttons and back buttons
+// always know which market to return to without it being passed in
+let currentMarket = null;
+
 
 // -------------------------------------------------------------
 // initInventory(marketId)
 // -------------------------------------------------------------
 // Entry point for the Inventario screen.
-// Loads both categories and items in parallel.
+// Loads both categories and items in parallel for speed.
+// Called by dashboard.js whenever this screen is shown
+// or the market toggle changes.
 // -------------------------------------------------------------
 export async function initInventory(marketId) {
   activeCategory = null;
+  currentMarket = marketId;  // Store so cancel buttons can use it
 
   const container = document.getElementById('screen-inventario');
   if (!container) return;
@@ -48,7 +56,7 @@ export async function initInventory(marketId) {
   container.innerHTML = '<div class="loading">Cargando inventario...</div>';
 
   try {
-    // Load categories and items at the same time for speed
+    // Promise.all loads both at the same time — faster than two sequential calls
     [currentCategories, currentItems] = await Promise.all([
       getCategories(),
       getInventory(marketId)
@@ -65,16 +73,19 @@ export async function initInventory(marketId) {
 // -------------------------------------------------------------
 // renderInventoryScreen(marketId)
 // -------------------------------------------------------------
-// Builds the full inventory screen HTML.
+// Builds the full inventory screen HTML and injects it into
+// the screen container. Called after data loads and after
+// any update (quantity change, new item, etc.).
 // -------------------------------------------------------------
 function renderInventoryScreen(marketId) {
+  currentMarket = marketId;
   const container = document.getElementById('screen-inventario');
 
   // Count items with stock issues for the alert banner
   const lowStockItems = currentItems.filter(i => i.quantity > 0 && i.quantity <= i.threshold);
   const outOfStockItems = currentItems.filter(i => i.quantity === 0);
 
-  // Build the alert banner if needed
+  // Build the alert banner — only shown if there are stock issues
   const alertHTML = (lowStockItems.length > 0 || outOfStockItems.length > 0) ? `
     <div class="alert-banner">
       <div class="alert-label">Alerta de stock</div>
@@ -85,12 +96,12 @@ function renderInventoryScreen(marketId) {
     </div>
   ` : '';
 
-  // Filter items based on active category
+  // Filter items based on the active category chip
   const filteredItems = activeCategory
     ? currentItems.filter(i => i.category_id === activeCategory)
     : currentItems;
 
-  // Build category filter chips
+  // Build category filter chips — one per category from the database
   const allChipActive = activeCategory === null ? 'active' : '';
   const categoryChipsHTML = currentCategories.map(cat => `
     <button class="btn btn-filter ${activeCategory === cat.id ? 'active' : ''}"
@@ -99,12 +110,12 @@ function renderInventoryScreen(marketId) {
     </button>
   `).join('');
 
-  // Build items list
+  // Build the items list or empty state
   const itemsHTML = filteredItems.length > 0
     ? filteredItems.map(item => renderInventoryCard(item, marketId)).join('')
     : '<div class="empty-state">No hay productos en esta categoría.</div>';
 
-  // Active category label for section title
+  // Section title changes based on the active filter
   const activeCatLabel = activeCategory
     ? currentCategories.find(c => c.id === activeCategory)?.label || 'Productos'
     : 'Todos los productos';
@@ -114,18 +125,12 @@ function renderInventoryScreen(marketId) {
 
     <div class="toolbar">
       <button class="btn btn-filter ${allChipActive}"
-              onclick="window._invSetCategory(null, '${marketId}')">
-        Todo
-      </button>
+              onclick="window._invSetCategory(null, '${marketId}')">Todo</button>
       ${categoryChipsHTML}
       <button class="btn btn-dashed"
-              onclick="window._invShowAddCategory('${marketId}')">
-        + Categoría
-      </button>
+              onclick="window._invShowAddCategory('${marketId}')">+ Categoría</button>
       <button class="btn btn-secondary ml-auto"
-              onclick="window._invShowAddItem('${marketId}')">
-        + Agregar
-      </button>
+              onclick="window._invShowAddItem('${marketId}')">+ Agregar</button>
     </div>
 
     <div class="section-title mb-sm">${activeCatLabel} — ${filteredItems.length} productos</div>
@@ -135,42 +140,46 @@ function renderInventoryScreen(marketId) {
     <div class="footer-brand">Elevate your style.</div>
   `;
 
-  // Expose handlers on window
-  window._invSetCategory     = (catId, market) => { activeCategory = catId; renderInventoryScreen(market); };
+  // Expose all action handlers on window so onclick attributes in the
+  // injected HTML can call them (module functions aren't global by default)
+  window._invSetCategory = (catId, market) => { activeCategory = catId; renderInventoryScreen(market); };
   window._invShowAddCategory = (market) => showAddCategoryForm(market);
-  window._invShowAddItem     = (market) => showAddItemForm(market);
-  window._invUpdateQty       = (itemId, market) => showUpdateQuantityForm(itemId, market);
-  window._invUpdateMin       = (itemId, market) => showUpdateThresholdForm(itemId, market);
-  window._invDeleteItem      = (itemId, market) => handleDeleteItem(itemId, market);
-  window._invDeleteCategory  = (catId, market) => handleDeleteCategory(catId, market);
+  window._invShowAddItem = (market) => showAddItemForm(market);
+  window._invUpdateQty = (itemId, market) => showUpdateQuantityForm(itemId, market);
+  window._invUpdateMin = (itemId, market) => showUpdateThresholdForm(itemId, market);
+  window._invDeleteItem = (itemId, market) => handleDeleteItem(itemId, market);
+  // Fixed: cancel button calls this instead of window.initInventory
+  // which was never exposed as a global
+  window._invCancel = (market) => initInventory(market);
 }
 
 
 // -------------------------------------------------------------
 // renderInventoryCard(item, marketId)
 // -------------------------------------------------------------
-// Returns HTML for a single inventory item card.
-// Stock status (ok/low/out) determines dot color and bar fill.
+// Returns the HTML string for a single inventory item card.
+// Stock status (ok/low/out) determines dot color, bar fill,
+// and card background.
 // -------------------------------------------------------------
 function renderInventoryCard(item, marketId) {
-  // Determine stock status
+  // Determine stock status based on quantity vs threshold
   let status;
-  if (item.quantity === 0) {
-    status = 'out';
-  } else if (item.quantity <= item.threshold) {
-    status = 'low';
-  } else {
-    status = 'ok';
-  }
+  if (item.quantity === 0) status = 'out';
+  else if (item.quantity <= item.threshold) status = 'low';
+  else status = 'ok';
 
-  // Calculate bar fill percentage (capped at 100%)
+  // Calculate bar fill percentage.
   // We use threshold * 3 as the "full" reference point so the bar
-  // makes visual sense even for items with small max quantities
+  // makes visual sense even for items with small max quantities.
   const maxRef = Math.max(item.threshold * 3, item.quantity);
   const fillPct = maxRef > 0 ? Math.min(Math.round((item.quantity / maxRef) * 100), 100) : 0;
 
-  // Add warning/out-of-stock card styling
-  const cardClass = status === 'out' ? 'card out-of-stock' : status === 'low' ? 'card warning' : 'card';
+  // Card gets extra styling for warning/out-of-stock states
+  const cardClass = status === 'out'
+    ? 'card out-of-stock'
+    : status === 'low'
+      ? 'card warning'
+      : 'card';
 
   return `
     <div class="${cardClass}" id="inv-${item.id}">
@@ -214,9 +223,9 @@ function renderInventoryCard(item, marketId) {
 // -------------------------------------------------------------
 // showUpdateQuantityForm(itemId, marketId)
 // -------------------------------------------------------------
-// Shows a simple prompt to update the quantity of an item.
-// Uses the browser's built-in prompt for simplicity — fast
-// and doesn't require a modal component.
+// Shows a browser prompt to update the quantity of an item.
+// We use the native prompt() for simplicity — it works on mobile
+// without needing a custom modal component.
 // -------------------------------------------------------------
 async function showUpdateQuantityForm(itemId, marketId) {
   const item = currentItems.find(i => i.id === itemId);
@@ -238,7 +247,7 @@ async function showUpdateQuantityForm(itemId, marketId) {
 
   try {
     await updateItemQuantity(itemId, quantity);
-    // Reload inventory to reflect the change
+    // Reload the full inventory screen to reflect the change
     await initInventory(marketId);
   } catch (error) {
     alert('Error al actualizar el stock. Inténtalo de nuevo.');
@@ -251,6 +260,7 @@ async function showUpdateQuantityForm(itemId, marketId) {
 // showUpdateThresholdForm(itemId, marketId)
 // -------------------------------------------------------------
 // Shows a prompt to update the minimum stock threshold.
+// When quantity drops to or below this number, an alert email is sent.
 // -------------------------------------------------------------
 async function showUpdateThresholdForm(itemId, marketId) {
   const item = currentItems.find(i => i.id === itemId);
@@ -283,6 +293,8 @@ async function showUpdateThresholdForm(itemId, marketId) {
 // showAddItemForm(marketId)
 // -------------------------------------------------------------
 // Replaces the inventory screen with a form to add a new item.
+// The cancel button uses window._invCancel which correctly
+// calls initInventory() to go back.
 // -------------------------------------------------------------
 function showAddItemForm(marketId) {
   const container = document.getElementById('screen-inventario');
@@ -325,17 +337,18 @@ function showAddItemForm(marketId) {
         Guardar producto
       </button>
       <button class="btn btn-secondary"
-              onclick="window.initInventory && window.initInventory('${marketId}')">
+              onclick="window._invCancel('${marketId}')">
         Cancelar
       </button>
     </div>
   `;
 
+  // Save handler — reads the form values and calls the API
   window._invSaveNewItem = async (market) => {
     const categoryId = parseInt(document.getElementById('new-item-category').value);
-    const name       = document.getElementById('new-item-name').value.trim();
-    const quantity   = parseInt(document.getElementById('new-item-qty').value) || 0;
-    const threshold  = parseInt(document.getElementById('new-item-threshold').value) || 5;
+    const name = document.getElementById('new-item-name').value.trim();
+    const quantity = parseInt(document.getElementById('new-item-qty').value) || 0;
+    const threshold = parseInt(document.getElementById('new-item-threshold').value) || 5;
 
     if (!name) {
       alert('El nombre del producto es obligatorio.');
@@ -343,38 +356,42 @@ function showAddItemForm(marketId) {
     }
 
     try {
-      await addInventoryItem({ market_id: market, category_id: categoryId, name, quantity, threshold });
+      await addInventoryItem({
+        market_id: market,
+        category_id: categoryId,
+        name,
+        quantity,
+        threshold
+      });
+      // Return to the inventory list after saving
       await initInventory(market);
     } catch (error) {
       alert('Error al guardar el producto.');
       console.error('Add item error:', error);
     }
   };
-
-  // Re-expose initInventory globally so the cancel button can call it
-  window.initInventory = initInventory;
 }
 
 
 // -------------------------------------------------------------
 // showAddCategoryForm(marketId)
 // -------------------------------------------------------------
-// Shows a prompt to add a new category.
+// Uses browser prompts to collect the category name and unit.
+// No custom modal needed — keeps things simple for a first version.
 // -------------------------------------------------------------
 async function showAddCategoryForm(marketId) {
   const label = prompt('Nombre de la nueva categoría:\n(Ej. Gorras, Ornamentos, Tote bags...)');
   if (!label || !label.trim()) return;
 
-  // Ask for the unit label
   const unit = prompt(
     `Unidad para "${label.trim()}":\n(Ej. units, pcs, sheets, pairs)\n\nEscribe la unidad:`,
     'units'
   );
-
   if (!unit) return;
 
   try {
     await addCategory({ label: label.trim(), unit: unit.trim() });
+    // Reload the screen so the new category chip appears
     await initInventory(marketId);
   } catch (error) {
     if (error.message.includes('already exists')) {
@@ -390,12 +407,13 @@ async function showAddCategoryForm(marketId) {
 // -------------------------------------------------------------
 // handleDeleteItem(itemId, marketId)
 // -------------------------------------------------------------
+// Asks for confirmation before permanently deleting an item.
+// -------------------------------------------------------------
 async function handleDeleteItem(itemId, marketId) {
   const item = currentItems.find(i => i.id === itemId);
   const name = item ? item.name : 'este producto';
 
-  const confirmed = confirm(`¿Segura que quieres eliminar "${name}"?`);
-  if (!confirmed) return;
+  if (!confirm(`¿Segura que quieres eliminar "${name}"?`)) return;
 
   try {
     await deleteInventoryItem(itemId);
@@ -410,12 +428,15 @@ async function handleDeleteItem(itemId, marketId) {
 // -------------------------------------------------------------
 // handleDeleteCategory(categoryId, marketId)
 // -------------------------------------------------------------
+// Deletes a category. The backend will reject this if any
+// inventory items still use the category — we show a helpful
+// error message in that case.
+// -------------------------------------------------------------
 async function handleDeleteCategory(categoryId, marketId) {
   const cat = currentCategories.find(c => c.id === categoryId);
   const name = cat ? cat.label : 'esta categoría';
 
-  const confirmed = confirm(`¿Segura que quieres eliminar "${name}"?\n\nSolo puedes eliminarla si no tiene productos asignados.`);
-  if (!confirmed) return;
+  if (!confirm(`¿Segura que quieres eliminar "${name}"?\n\nSolo puedes eliminarla si no tiene productos asignados.`)) return;
 
   try {
     await deleteCategory(categoryId);

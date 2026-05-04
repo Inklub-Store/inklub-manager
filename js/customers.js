@@ -2,16 +2,40 @@
 // customers.js — Inklub Store Manager
 // Clientes Screen Logic
 // =============================================================
+// Handles everything on the Clientes screen:
+//   - Loading and displaying customers with stats
+//   - Search filtering
+//   - Viewing a customer's full order history
+//   - Editing customer notes
+//
+// FIX: The back button from customer order history was hardcoded
+// to use 'ca' as the market, which meant switching to Panama and
+// then viewing a customer's orders would bring you back to Canada.
+// Fixed by tracking currentMarket and using it in the back button.
+// =============================================================
 
 import { getCustomers, getCustomerOrders, updateCustomerNotes } from './api.js';
 
+
+// Store the current customers list so search can filter
+// without making a new API call
 let currentCustomers = [];
+
+// Track the current market so the back button from order history
+// always returns to the correct market — fixes the hardcoded 'ca' bug
+let currentMarket = null;
 
 
 // -------------------------------------------------------------
 // initCustomers(marketId)
 // -------------------------------------------------------------
+// Entry point for the Clientes screen.
+// Called by dashboard.js whenever this screen is shown
+// or the market toggle changes.
+// -------------------------------------------------------------
 export async function initCustomers(marketId) {
+  currentMarket = marketId;  // Store so back button can use it
+
   const container = document.getElementById('screen-clientes');
   if (!container) return;
 
@@ -30,7 +54,11 @@ export async function initCustomers(marketId) {
 // -------------------------------------------------------------
 // renderCustomersScreen(marketId)
 // -------------------------------------------------------------
+// Builds the customers list screen HTML.
+// Also sets up the search handler and button handlers.
+// -------------------------------------------------------------
 function renderCustomersScreen(marketId) {
+  currentMarket = marketId;
   const container = document.getElementById('screen-clientes');
 
   const customersHTML = currentCustomers.length > 0
@@ -42,9 +70,7 @@ function renderCustomersScreen(marketId) {
            placeholder="Buscar cliente..."
            oninput="window._customersSearch(this.value, '${marketId}')" />
 
-    <div class="section-title mb-sm">
-      ${currentCustomers.length} clientes
-    </div>
+    <div class="section-title mb-sm">${currentCustomers.length} clientes</div>
 
     <div id="customers-list">
       ${customersHTML}
@@ -53,13 +79,14 @@ function renderCustomersScreen(marketId) {
     <div class="footer-brand">Elevate your style.</div>
   `;
 
-  // Search handler — filters the displayed list without re-fetching
+  // Search handler — filters the displayed list without re-fetching from the API.
+  // Searches by name and contact (WhatsApp / Instagram handle).
   window._customersSearch = (query, market) => {
     const filtered = query.trim()
       ? currentCustomers.filter(c =>
-          c.name.toLowerCase().includes(query.toLowerCase()) ||
-          (c.contact && c.contact.toLowerCase().includes(query.toLowerCase()))
-        )
+        c.name.toLowerCase().includes(query.toLowerCase()) ||
+        (c.contact && c.contact.toLowerCase().includes(query.toLowerCase()))
+      )
       : currentCustomers;
 
     document.getElementById('customers-list').innerHTML = filtered.length > 0
@@ -68,34 +95,38 @@ function renderCustomersScreen(marketId) {
   };
 
   window._customersViewOrders = (customerId) => showCustomerOrders(customerId);
-  window._customersEditNotes  = (customerId, marketId) => showEditNotesForm(customerId, marketId);
+  window._customersEditNotes = (customerId, market) => showEditNotesForm(customerId, market);
 }
 
 
 // -------------------------------------------------------------
 // renderCustomerCard(customer, marketId)
 // -------------------------------------------------------------
+// Returns the HTML for a single customer card.
+// Customers with 3+ orders get the "Frecuente" badge and
+// an outlined avatar to make them stand out.
+// -------------------------------------------------------------
 function renderCustomerCard(customer, marketId) {
-  // Get initials from the customer's name (first letter of first two words)
+  // Get initials from the first two words of the customer's name
   const initials = customer.name
     .split(' ')
     .slice(0, 2)
     .map(word => word[0]?.toUpperCase() || '')
     .join('');
 
-  // Customers with 3+ orders get the "Frecuente" badge
+  // Frequent customers: 3 or more orders
   const isFrequent = customer.order_count >= 3;
   const avatarClass = isFrequent ? 'avatar frequent' : 'avatar';
-  const frequentBadgeHTML = isFrequent
+  const frequentHTML = isFrequent
     ? '<span class="badge badge-ready ml-auto">Frecuente</span>'
     : '';
 
-  // Format the last order date
+  // Format the last order date in Spanish short format (e.g. "3 may")
   const lastOrderDate = customer.last_order_at
     ? new Date(customer.last_order_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
     : '—';
 
-  // Notes block — only shown if notes exist
+  // Notes block only appears if notes have been saved for this customer
   const notesHTML = customer.notes
     ? `<div class="customer-notes">${customer.notes}</div>`
     : '';
@@ -108,7 +139,7 @@ function renderCustomerCard(customer, marketId) {
           <div class="customer-name">${customer.name}</div>
           <div class="customer-contact">${customer.contact || 'Sin contacto'}</div>
         </div>
-        ${frequentBadgeHTML}
+        ${frequentHTML}
       </div>
 
       <div class="customer-stats">
@@ -137,7 +168,9 @@ function renderCustomerCard(customer, marketId) {
 // -------------------------------------------------------------
 // showCustomerOrders(customerId)
 // -------------------------------------------------------------
-// Shows all orders for a specific customer.
+// Replaces the customers list with the full order history
+// for a specific customer. The back button returns to the
+// customers list using currentMarket (fixed bug).
 // -------------------------------------------------------------
 async function showCustomerOrders(customerId) {
   const customer = currentCustomers.find(c => c.id === customerId);
@@ -150,16 +183,31 @@ async function showCustomerOrders(customerId) {
 
     const ordersHTML = orders.length > 0
       ? orders.map(order => {
-          const date = new Date(order.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
-          const statusLabels = { pending: 'Pendiente', in_production: 'En producción', ready: 'Listo', delivered: 'Entregado' };
-          return `
+        const date = new Date(order.created_at).toLocaleDateString('es-ES', {
+          day: 'numeric', month: 'short', year: 'numeric'
+        });
+
+        // Map production_status to Spanish labels
+        const statusLabels = {
+          pending: 'Pendiente',
+          in_production: 'En producción',
+          ready: 'Listo',
+          delivered: 'Entregado'
+        };
+
+        // Map status to badge class
+        const statusClass = order.production_status === 'ready' ? 'badge-ready'
+          : order.production_status === 'delivered' ? 'badge-delivered'
+            : 'badge-pending';
+
+        return `
             <div class="card">
               <div class="flex-between mb-sm">
                 <span class="order-name">${order.product}</span>
                 <span class="text-small">${date}</span>
               </div>
               <div class="order-badges">
-                <span class="badge badge-${order.production_status === 'ready' ? 'ready' : order.production_status === 'delivered' ? 'delivered' : 'pending'}">
+                <span class="badge ${statusClass}">
                   ${statusLabels[order.production_status] || order.production_status}
                 </span>
                 <span class="badge ${order.payment_status === 'paid' ? 'badge-paid' : 'badge-unpaid'}">
@@ -169,21 +217,22 @@ async function showCustomerOrders(customerId) {
               </div>
             </div>
           `;
-        }).join('')
+      }).join('')
       : '<div class="empty-state">Este cliente no tiene pedidos aún.</div>';
 
     container.innerHTML = `
       <div class="section-header mb-sm">
         <span class="section-title">Historial de ${customer?.name || 'cliente'}</span>
-        <button class="btn btn-secondary"
-                onclick="window._customersBack()">
+        <button class="btn btn-secondary" onclick="window._customersBack()">
           ← Volver
         </button>
       </div>
       ${ordersHTML}
     `;
 
-    window._customersBack = () => renderCustomersScreen(customer?.market_id || 'ca');
+    // Fixed: use currentMarket instead of hardcoded 'ca'
+    // This ensures going back always returns to the correct market
+    window._customersBack = () => renderCustomersScreen(currentMarket);
 
   } catch (error) {
     container.innerHTML = '<div class="empty-state">Error al cargar el historial.</div>';
@@ -195,6 +244,10 @@ async function showCustomerOrders(customerId) {
 // -------------------------------------------------------------
 // showEditNotesForm(customerId, marketId)
 // -------------------------------------------------------------
+// Uses a browser prompt to edit customer notes.
+// Notes are free-form text — she can write anything useful
+// like sizes, preferences, payment habits, etc.
+// -------------------------------------------------------------
 async function showEditNotesForm(customerId, marketId) {
   const customer = currentCustomers.find(c => c.id === customerId);
   if (!customer) return;
@@ -204,11 +257,12 @@ async function showEditNotesForm(customerId, marketId) {
     customer.notes || ''
   );
 
-  // User cancelled
+  // User cancelled — null means they pressed Cancel, not just cleared the field
   if (newNotes === null) return;
 
   try {
     await updateCustomerNotes(customerId, newNotes);
+    // Reload the customers screen to show the updated notes
     await initCustomers(marketId);
   } catch (error) {
     alert('Error al guardar las notas.');

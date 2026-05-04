@@ -9,12 +9,16 @@
 #   POST   /api/orders                      — create a new order
 #   PATCH  /api/orders/<id>/status          — update production or payment status
 #   DELETE /api/orders/<id>                 — delete an order
+#
+# FIX: Added currency field to all order queries by joining the
+# markets table. The frontend uses order.currency to display
+# prices like "$60 CAD". Also wrapped all fetchall() results
+# in list() so they serialize correctly to JSON.
 # =============================================================
 
 from flask import Blueprint, jsonify, request
 from db import get_db
 from routes.auth import require_auth
-from notifications import send_low_stock_alert   # We'll create this next
 
 orders_bp = Blueprint("orders", __name__)
 
@@ -24,16 +28,14 @@ orders_bp = Blueprint("orders", __name__)
 # -------------------------------------------------------------
 # Returns all active (non-delivered) orders for a market,
 # newest first. Used for the main orders screen.
+# Joins markets to include currency for price display.
 # -------------------------------------------------------------
 @orders_bp.route("/<market_id>", methods=["GET"])
 @require_auth
 def get_orders(market_id):
     with get_db() as conn:
         orders = conn.execute("""
-            SELECT o.*,
-                   m.currency,
-                   m.flag,
-                   m.payment AS market_payment
+            SELECT o.*, m.currency, m.flag, m.payment AS market_payment
             FROM orders o
             JOIN markets m ON m.id = o.market_id
             WHERE o.market_id = %s
@@ -41,7 +43,8 @@ def get_orders(market_id):
             ORDER BY o.created_at DESC
         """, (market_id,)).fetchall()
 
-    return jsonify(orders), 200
+    # list() wraps the result so it serializes correctly to JSON
+    return jsonify(list(orders)), 200
 
 
 # -------------------------------------------------------------
@@ -55,9 +58,7 @@ def get_orders(market_id):
 def get_archive(market_id):
     with get_db() as conn:
         orders = conn.execute("""
-            SELECT o.*,
-                   m.currency,
-                   m.flag
+            SELECT o.*, m.currency, m.flag
             FROM orders o
             JOIN markets m ON m.id = o.market_id
             WHERE o.market_id = %s
@@ -65,7 +66,7 @@ def get_archive(market_id):
             ORDER BY o.delivered_at DESC
         """, (market_id,)).fetchall()
 
-    return jsonify(orders), 200
+    return jsonify(list(orders)), 200
 
 
 # -------------------------------------------------------------
@@ -94,7 +95,7 @@ def create_order():
     required = ["market_id", "customer_name", "product"]
     missing = [f for f in required if not data.get(f)]
     if missing:
-        return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
+        return jsonify({"error": f"Campos requeridos: {', '.join(missing)}"}), 400
 
     with get_db() as conn:
         # Look up the market to get the default payment method
@@ -103,34 +104,32 @@ def create_order():
         ).fetchone()
 
         if not market:
-            return jsonify({"error": "Invalid market_id."}), 400
+            return jsonify({"error": "Mercado inválido."}), 400
 
         # Find or create the customer record.
-        # We match on name + market + contact to avoid duplicates.
+        # We match on name + market using ILIKE (case-insensitive).
         customer = conn.execute("""
             SELECT id FROM customers
-            WHERE market_id = %s
-              AND name ILIKE %s
+            WHERE market_id = %s AND name ILIKE %s
         """, (data["market_id"], data["customer_name"])).fetchone()
 
         if not customer:
             # First time this customer has ordered — create their record
             customer = conn.execute("""
                 INSERT INTO customers (market_id, name, contact)
-                VALUES (%s, %s, %s)
-                RETURNING id
+                VALUES (%s, %s, %s) RETURNING id
             """, (
                 data["market_id"],
                 data["customer_name"],
                 data.get("customer_contact")
             )).fetchone()
 
-        # Calculate total price
+        # Calculate total price from quantity × unit price
         quantity   = data.get("quantity", 1)
         unit_price = data.get("unit_price")
         total      = (quantity * unit_price) if unit_price else None
 
-        # Insert the order
+        # Insert the order — default status is pending + unpaid
         order = conn.execute("""
             INSERT INTO orders (
                 market_id, customer_id, customer_name, customer_contact,
@@ -147,11 +146,11 @@ def create_order():
             quantity,
             unit_price,
             total,
-            market["payment"],       # Default to market's payment method
+            market["payment"],  # Default to market's payment method
             data.get("notes")
         )).fetchone()
 
-    return jsonify({"message": "Order created.", "order": order}), 201
+    return jsonify({"message": "Pedido creado.", "order": dict(order)}), 201
 
 
 # -------------------------------------------------------------
@@ -180,7 +179,7 @@ def update_status(order_id):
 
     if "production_status" in data:
         if data["production_status"] not in valid_production:
-            return jsonify({"error": "Invalid production_status value."}), 400
+            return jsonify({"error": "Estado de producción inválido."}), 400
         updates.append("production_status = %s")
         values.append(data["production_status"])
 
@@ -190,12 +189,12 @@ def update_status(order_id):
 
     if "payment_status" in data:
         if data["payment_status"] not in valid_payment:
-            return jsonify({"error": "Invalid payment_status value."}), 400
+            return jsonify({"error": "Estado de pago inválido."}), 400
         updates.append("payment_status = %s")
         values.append(data["payment_status"])
 
     if not updates:
-        return jsonify({"error": "No valid fields to update."}), 400
+        return jsonify({"error": "No hay campos válidos para actualizar."}), 400
 
     # Add the order ID as the last value (for the WHERE clause)
     values.append(order_id)
@@ -207,16 +206,16 @@ def update_status(order_id):
         ).fetchone()
 
         if not order:
-            return jsonify({"error": "Order not found."}), 404
+            return jsonify({"error": "Pedido no encontrado."}), 404
 
-    return jsonify({"message": "Status updated.", "order": order}), 200
+    return jsonify({"message": "Estado actualizado.", "order": dict(order)}), 200
 
 
 # -------------------------------------------------------------
 # DELETE /api/orders/<id>
 # -------------------------------------------------------------
 # Deletes an order permanently. Used for mistakes or test entries.
-# In practice she should rarely need this.
+# The frontend asks for confirmation before calling this.
 # -------------------------------------------------------------
 @orders_bp.route("/<int:order_id>", methods=["DELETE"])
 @require_auth
@@ -227,6 +226,6 @@ def delete_order(order_id):
         ).fetchone()
 
         if not deleted:
-            return jsonify({"error": "Order not found."}), 404
+            return jsonify({"error": "Pedido no encontrado."}), 404
 
-    return jsonify({"message": "Order deleted."}), 200
+    return jsonify({"message": "Pedido eliminado."}), 200
