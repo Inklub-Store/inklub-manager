@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<!--
+  dashboard.html — Inklub Store Manager
+  Main Application Shell
+
+  This is the main app page — it contains ALL screens in a single
+  HTML file. JavaScript controls which screen is visible at any time
+  by toggling the .active class on each .screen div.
+
+  WHY ONE FILE:
+  - Simpler to deploy on GitHub Pages
+  - No page reloads between screens (feels like a native app)
+  - Shared topbar and nav rendered once
+
+  SCREENS:
+  - #screen-inicio      → Dashboard / Inicio
+  - #screen-pedidos     → Orders / Pedidos
+  - #screen-inventario  → Inventory / Inventario
+  - #screen-clientes    → Customers / Clientes
+  - #screen-settings    → Settings / Configuración
+-->
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inklub — Gestión de tienda</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+
+  <div class="app">
+
+    <!-- ==========================================================
+         TOPBAR
+         Always visible — contains logo, market toggle, gear icon
+         ========================================================== -->
+    <header class="topbar">
+
+      <!-- Logo -->
+      <div class="topbar-logo">
+        <div class="logo-mark">
+          <!-- Three-bar Inklub logo mark -->
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1" width="6" height="22" rx="1.5" fill="white" />
+            <rect x="9" y="1" width="6" height="22" rx="1.5" fill="white" />
+            <rect x="17" y="1" width="6" height="22" rx="1.5" fill="white" />
+          </svg>
+        </div>
+        <div>
+          <div class="logo-name">Inklub</div>
+          <div class="logo-subtitle">Gestión de tienda</div>
+        </div>
+      </div>
+
+      <!-- Right side: market toggle + settings gear -->
+      <div class="topbar-actions">
+
+        <!-- Market Toggle: CA / PA -->
+        <!-- data-market tells the JS which market to switch to -->
+        <div class="market-toggle">
+          <button data-market="ca" class="active">CA</button>
+          <button data-market="pa">PA</button>
+        </div>
+
+        <!-- Settings gear icon button -->
+        <!-- Clicking this toggles the settings screen -->
+        <button class="btn-settings" id="btn-settings" title="Configuración">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="#111111" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+              stroke="#111111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+      </div>
+    </header>
+
+
+    <!-- ==========================================================
+         NAVIGATION TABS
+         Always visible — data-screen tells JS which screen to show
+         ========================================================== -->
+    <nav class="nav">
+      <button data-screen="inicio" class="active">Inicio</button>
+      <button data-screen="pedidos">Pedidos</button>
+      <button data-screen="inventario">Inventario</button>
+      <button data-screen="clientes">Clientes</button>
+    </nav>
+
+
+    <!-- ==========================================================
+         MARKET LABEL
+         "Canadá · CAD · e-Transfer" — updated by JS on market change
+         ========================================================== -->
+    <div class="market-label" id="market-label">
+      🇨🇦 Canadá · CAD · e-Transfer
+    </div>
+
+
+    <!-- ==========================================================
+         SCREEN CONTAINERS
+         Each screen's content is injected here by its JS module.
+         Only one screen has .active at a time — the rest are hidden.
+         ========================================================== -->
+    <main class="page-content">
+
+      <!-- Inicio / Dashboard screen -->
+      <!-- Content injected by dashboard.js → loadDashboard() -->
+      <div class="screen active" id="screen-inicio">
+        <div class="loading">Cargando...</div>
+      </div>
+
+      <!-- Pedidos / Orders screen -->
+      <!-- Content injected by orders.js → initOrders() -->
+      <div class="screen" id="screen-pedidos"></div>
+
+      <!-- Inventario / Inventory screen -->
+      <!-- Content injected by inventory.js → initInventory() -->
+      <div class="screen" id="screen-inventario"></div>
+
+      <!-- Clientes / Customers screen -->
+      <!-- Content injected by customers.js → initCustomers() -->
+      <div class="screen" id="screen-clientes"></div>
+
+      <!-- Configuración / Settings screen -->
+      <!-- Content injected by settings.js → initSettings() -->
+      <div class="screen" id="screen-settings"></div>
+
+    </main>
+
+  </div>
+  <!-- end .app -->
+
+
+  <!--
+    dashboard.js is the main app controller.
+    It imports all other modules and wires everything together.
+    type="module" enables ES module imports across all JS files.
+  -->
+  <script type="module">
+    import { checkAuthStatus } from './js/api.js';
+    import { initApp } from './js/dashboard.js';
+
+    // Check auth before doing anything.
+    // If not logged in, redirect to login page.
+    // This prevents someone from accessing the dashboard directly
+    // without a valid session.
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const status = await checkAuthStatus();
+        if (!status.logged_in) {
+          window.location.href = 'index.html';
+          return;
+        }
+        // Logged in — start the app
+        initApp();
+      } catch (error) {
+        // Can't reach the backend — redirect to login
+        console.error('Auth check failed:', error);
+        window.location.href = 'index.html';
+      }
+    });
+  </script>
+
+</body>
+
+</html>

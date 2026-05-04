@@ -1,0 +1,685 @@
+/* =============================================================
+   style.css — Inklub Store Manager
+   Main Stylesheet
+   =============================================================
+   This is the ONLY stylesheet for the entire app.
+   Everything — colors, typography, layout, components — is
+   defined here. No other CSS files are needed.
+
+   STRUCTURE:
+   1. CSS Variables   — colors, fonts, sizes (change here = changes everywhere)
+   2. Reset           — browser default style removal
+   3. Typography      — headings, body text, labels
+   4. Layout          — topbar, nav, page structure
+   5. Components      — buttons, badges, cards, forms, alerts
+   6. Utilities       — helper classes
+   ============================================================= */
+
+
+/* =============================================================
+   1. CSS VARIABLES
+   =============================================================
+   All design tokens live here. If you ever want to change the
+   brand colors, fonts, or sizing — this is the ONLY place to
+   touch. Every other rule references these variables.
+   ============================================================= */
+:root {
+
+  /* --- Brand Colors (from Inklub brand guidelines) --- */
+  --color-black:  #111111;   /* Primary black — text, buttons, logo */
+  --color-white:  #FFFFFF;   /* White — page backgrounds, text on black */
+  --color-cream:  #F5F0E8;   /* Warm cream — secondary backgrounds, alerts */
+  --color-sand:   #D4CFC7;   /* Sand grey — borders, subtle fills */
+  --color-grey:   #888888;   /* Text grey — secondary text, labels */
+
+  /* --- Semantic Colors --- */
+  /* These map brand colors to meaning so the code is readable */
+  --color-bg-page:       var(--color-white);
+  --color-bg-secondary:  var(--color-cream);
+  --color-bg-dark:       var(--color-black);
+  --color-border:        var(--color-sand);
+  --color-border-strong: var(--color-black);
+  --color-text-primary:  var(--color-black);
+  --color-text-secondary:var(--color-grey);
+  --color-text-hint:     var(--color-sand);
+
+  /* --- Typography --- */
+  /* Liberation Sans is the brand UI font (closest web-safe: Arial) */
+  --font-body:    'Liberation Sans', Arial, sans-serif;
+  /* DejaVu Serif is the brand display font (closest web-safe: Georgia) */
+  --font-display: 'DejaVu Serif', Georgia, serif;
+
+  /* --- Type Scale (from brand guidelines) --- */
+  --text-h1:    48px;
+  --text-h2:    32px;
+  --text-h3:    18px;
+  --text-body:  15px;
+  --text-small: 13px;
+  --text-label: 10px;
+
+  /* --- Spacing --- */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  12px;
+  --space-lg:  16px;
+  --space-xl:  24px;
+  --space-2xl: 32px;
+
+  /* --- Border Radius --- */
+  --radius-sm: 2px;   /* Buttons, badges — sharp and direct */
+  --radius-md: 4px;   /* Cards, inputs */
+  --radius-lg: 8px;   /* Logo mark, large containers */
+
+  /* --- Border Width --- */
+  --border-thin:   0.5px;
+  --border-normal: 1px;
+  --border-strong: 1.5px;
+
+  /* --- Transitions --- */
+  --transition: 0.15s ease;
+}
+
+
+/* =============================================================
+   2. RESET
+   =============================================================
+   Removes inconsistent browser default styles so everything
+   looks the same across Chrome, Safari, Firefox, etc.
+   ============================================================= */
+
+/* Apply border-box sizing to everything — makes width/padding
+   calculations predictable */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+ul, ol { list-style: none; }
+
+img { max-width: 100%; display: block; }
+
+/* Remove default button styles — we style them ourselves */
+button {
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+}
+
+/* Remove default input styles */
+input, textarea, select {
+  font-family: var(--font-body);
+  font-size: var(--text-small);
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+}
+
+/* Remove tap highlight on mobile */
+* { -webkit-tap-highlight-color: transparent; }
+
+
+/* =============================================================
+   3. TYPOGRAPHY
+   ============================================================= */
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* 10px all-caps label — used for section titles, field labels */
+.label {
+  font-size: var(--text-label);
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.text-small { font-size: var(--text-small); color: var(--color-text-secondary); }
+.text-hint  { font-size: var(--text-small); color: var(--color-text-secondary); font-style: italic; }
+
+
+/* =============================================================
+   4. LAYOUT
+   ============================================================= */
+
+/* Constrains the app to mobile width and centers it on desktop */
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--color-bg-page);
+  min-height: 100vh;
+}
+
+/* --- Topbar --- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--border-strong) solid var(--color-black);
+  position: sticky;
+  top: 0;
+  background: var(--color-bg-page);
+  z-index: 100;
+}
+
+.topbar-logo { display: flex; align-items: center; gap: var(--space-sm); }
+
+/* The three-bar Inklub logo mark */
+.logo-mark {
+  width: 30px;
+  height: 30px;
+  background: var(--color-black);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.logo-mark svg { width: 14px; height: 14px; }
+
+.logo-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+  line-height: 1.1;
+}
+
+.logo-subtitle {
+  font-size: 9px;
+  color: var(--color-text-secondary);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.topbar-actions { display: flex; align-items: center; gap: var(--space-sm); }
+
+/* --- Market Toggle --- */
+.market-toggle {
+  display: flex;
+  border: var(--border-strong) solid var(--color-black);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  gap: 2px;
+  background: var(--color-white);
+}
+
+.market-toggle button {
+  font-size: var(--text-label);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  transition: background var(--transition), color var(--transition);
+}
+
+.market-toggle button.active {
+  background: var(--color-black);
+  color: var(--color-white);
+}
+
+/* --- Settings Gear Button --- */
+.btn-settings {
+  width: 30px;
+  height: 30px;
+  border: var(--border-strong) solid var(--color-black);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-white);
+  transition: background var(--transition);
+  flex-shrink: 0;
+}
+
+/* Gear turns white/inverted when settings is the active screen */
+.btn-settings.active {
+  background: var(--color-black);
+}
+
+.btn-settings.active svg path,
+.btn-settings.active svg circle {
+  stroke: var(--color-white);
+}
+
+.btn-settings svg { width: 14px; height: 14px; }
+
+/* --- Navigation Tabs --- */
+.nav {
+  display: flex;
+  border-bottom: var(--border-normal) solid var(--color-border);
+  position: sticky;
+  top: 54px;  /* Height of topbar */
+  background: var(--color-bg-page);
+  z-index: 99;
+}
+
+.nav button {
+  flex: 1;
+  font-size: var(--text-label);
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 8px var(--space-sm);
+  color: var(--color-text-secondary);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--transition), border-color var(--transition);
+  white-space: nowrap;
+}
+
+.nav button.active {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-black);
+}
+
+/* --- Market Label --- */
+/* "Canadá · CAD · e-Transfer" line below the nav */
+.market-label {
+  font-size: var(--text-label);
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  padding: var(--space-md) var(--space-lg) var(--space-sm);
+}
+
+/* --- Page Content --- */
+.page-content {
+  padding: var(--space-sm) var(--space-lg) var(--space-2xl);
+}
+
+/* Screens are shown/hidden by JS toggling .active */
+.screen { display: none; }
+.screen.active { display: block; }
+
+
+/* =============================================================
+   5. COMPONENTS
+   ============================================================= */
+
+/* --- Stat Cards --- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.stat-card { border-radius: var(--radius-md); padding: 11px 13px; }
+.stat-card .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 5px; }
+.stat-card .stat-value { font-size: 24px; font-weight: 700; line-height: 1; }
+.stat-card .stat-sub   { font-size: 10px; margin-top: 3px; }
+
+/* Alert stat — black bg for numbers needing attention */
+.stat-card.alert { background: var(--color-black); }
+.stat-card.alert .stat-label { color: var(--color-grey); }
+.stat-card.alert .stat-value { color: var(--color-white); }
+.stat-card.alert .stat-sub   { color: var(--color-grey); }
+
+/* Info stat — cream bg for informational numbers */
+.stat-card.info { background: var(--color-cream); }
+.stat-card.info .stat-label { color: var(--color-grey); }
+.stat-card.info .stat-value { color: var(--color-black); }
+.stat-card.info .stat-sub   { color: var(--color-grey); }
+
+
+/* --- Alert Banner --- */
+.alert-banner {
+  border-left: 2px solid var(--color-black);
+  background: var(--color-cream);
+  padding: var(--space-sm) 11px;
+  margin-bottom: var(--space-lg);
+}
+
+.alert-banner .alert-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--color-black); margin-bottom: 2px;
+}
+
+.alert-banner .alert-text { font-size: 11px; color: var(--color-text-secondary); }
+
+
+/* --- Section Header --- */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+
+.section-title {
+  font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--color-text-secondary);
+}
+
+.divider { height: var(--border-thin); background: var(--color-border); margin: var(--space-lg) 0; }
+
+
+/* --- Buttons --- */
+/* Base button — all button types share these styles */
+.btn {
+  display: inline-block;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.8px;
+  text-transform: uppercase; padding: 5px 11px;
+  border-radius: var(--radius-sm);
+  border: var(--border-strong) solid transparent;
+  cursor: pointer; white-space: nowrap; line-height: 1;
+  transition: opacity var(--transition);
+  font-family: var(--font-body);
+}
+
+.btn:active { opacity: 0.8; }
+
+/* Primary — solid black. Main action on each card. */
+.btn-primary   { background: var(--color-black);  color: var(--color-white); border-color: var(--color-black); }
+/* Secondary — white with black border. Edit actions. */
+.btn-secondary { background: var(--color-white);  color: var(--color-black); border-color: var(--color-black); }
+/* Success — cream with black border. "Marcar pagado". */
+.btn-success   { background: var(--color-cream);  color: var(--color-black); border-color: var(--color-black); }
+/* Danger — white with grey border. Delete actions. */
+.btn-danger    { background: var(--color-white);  color: var(--color-grey);  border-color: var(--color-grey); }
+/* Filter — used in toolbar rows */
+.btn-filter    { background: var(--color-white);  color: var(--color-black); border-color: var(--color-black); font-size: var(--text-label); }
+.btn-filter.active { background: var(--color-black); color: var(--color-white); }
+/* Dashed — "+ Categoría" add button */
+.btn-dashed    { background: var(--color-white);  color: var(--color-grey);  border: var(--border-strong) dashed var(--color-grey); }
+/* Full width */
+.btn-full      { width: 100%; text-align: center; display: block; padding: 12px; font-size: 11px; letter-spacing: 1.5px; }
+
+/* Count badge inside filter buttons */
+.filter-count {
+  display: inline-block; font-size: 9px;
+  background: var(--color-grey); color: var(--color-white);
+  border-radius: var(--radius-sm); padding: 1px 4px; margin-left: 3px;
+}
+
+
+/* --- Badges --- */
+.badge {
+  display: inline-block; font-size: 9px; font-weight: 700;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  padding: 3px 7px; border-radius: var(--radius-sm); line-height: 1;
+}
+
+/* Production status */
+.badge-ready     { background: var(--color-black);  color: var(--color-white); }
+.badge-prod      { background: var(--color-sand);   color: var(--color-black); }
+.badge-pending   { background: var(--color-cream);  color: var(--color-grey);  }
+.badge-delivered { background: var(--color-cream);  color: var(--color-grey);  }
+
+/* Payment status */
+.badge-paid   { background: var(--color-cream); color: var(--color-black); border: 0.5px solid var(--color-sand); }
+.badge-unpaid { background: var(--color-sand);  color: var(--color-black); }
+
+
+/* --- Cards --- */
+.card {
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 11px 13px;
+  margin-bottom: var(--space-sm);
+  background: var(--color-bg-page);
+}
+
+.card.warning     { border-color: var(--color-grey); }
+.card.out-of-stock{ background: var(--color-cream); border-color: var(--color-sand); }
+
+.card-actions {
+  display: flex; gap: var(--space-sm);
+  margin-top: var(--space-sm); padding-top: var(--space-sm);
+  border-top: var(--border-thin) solid var(--color-cream);
+  flex-wrap: wrap;
+}
+
+
+/* --- Forms --- */
+.form-card { background: var(--color-white); border-radius: var(--radius-md); padding: var(--space-lg); margin-bottom: var(--space-sm); }
+
+.form-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--color-text-secondary); margin-bottom: var(--space-md);
+}
+
+.field-label {
+  display: block; font-size: var(--text-label); font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--color-text-secondary); margin-bottom: 6px;
+}
+
+.field-input {
+  display: block; width: 100%; padding: 9px 11px;
+  border: var(--border-strong) solid var(--color-black);
+  border-radius: var(--radius-sm); font-size: var(--text-small);
+  color: var(--color-text-primary); background: var(--color-white);
+  margin-bottom: var(--space-md);
+}
+
+.field-input:focus { outline: none; }
+.field-input::placeholder { color: var(--color-sand); }
+
+.field-textarea {
+  display: block; width: 100%; padding: 9px 11px;
+  border: var(--border-strong) solid var(--color-black);
+  border-radius: var(--radius-sm); font-size: var(--text-small);
+  color: var(--color-text-primary); background: var(--color-white);
+  resize: none; height: 80px; font-family: var(--font-body);
+}
+
+.field-textarea:focus { outline: none; }
+
+/* Two-column field row — Talla + Cantidad */
+.field-row { display: flex; gap: var(--space-sm); }
+.field-row > * { flex: 1; }
+
+
+/* --- Toolbar --- */
+.toolbar { display: flex; gap: var(--space-sm); margin-bottom: var(--space-md); flex-wrap: wrap; align-items: center; }
+
+
+/* --- Order Card --- */
+.order-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2px; }
+.order-name  { font-size: var(--text-small); font-weight: 700; color: var(--color-text-primary); }
+.order-date  { font-size: var(--text-label); color: var(--color-text-secondary); }
+.order-item  { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; }
+.order-notes { font-size: 10px; color: var(--color-text-secondary); font-style: italic; margin-bottom: 7px; }
+.order-badges{ display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.order-price { margin-left: auto; font-size: var(--text-small); font-weight: 700; color: var(--color-text-primary); }
+
+
+/* --- Inventory Card --- */
+.inv-card-top { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+
+/* Status dot */
+.inv-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.inv-dot.ok  { background: var(--color-black); }
+.inv-dot.low { background: var(--color-grey); }
+.inv-dot.out { background: var(--color-sand); }
+
+.inv-name { font-size: var(--text-small); font-weight: 700; color: var(--color-text-primary); flex: 1; }
+
+.inv-category {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.8px;
+  text-transform: uppercase; background: var(--color-cream);
+  color: var(--color-grey); padding: 2px 7px; border-radius: var(--radius-sm);
+}
+
+.inv-bar-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+
+.inv-bar-track { flex: 1; height: 3px; background: var(--color-sand); border-radius: 2px; overflow: hidden; }
+
+.inv-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
+.inv-bar-fill.ok  { background: var(--color-black); }
+.inv-bar-fill.low { background: var(--color-grey); }
+.inv-bar-fill.out { background: var(--color-sand); }
+
+.inv-qty { font-size: 11px; font-weight: 700; color: var(--color-text-primary); min-width: 60px; text-align: right; }
+
+.inv-minimum-row { display: flex; align-items: center; gap: var(--space-sm); }
+.inv-minimum-label { font-size: 10px; color: var(--color-text-secondary); }
+.inv-minimum-value { font-size: 10px; font-weight: 700; color: var(--color-text-primary); }
+
+
+/* --- Customer Card --- */
+.customer-top { display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-sm); }
+
+/* Initials avatar */
+.avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--color-black); display: flex; align-items: center;
+  justify-content: center; font-size: 12px; font-weight: 700;
+  color: var(--color-white); flex-shrink: 0;
+}
+
+/* Frequent customer — outlined avatar */
+.avatar.frequent {
+  background: var(--color-cream); color: var(--color-black);
+  border: var(--border-strong) solid var(--color-black);
+}
+
+.customer-name    { font-size: var(--text-small); font-weight: 700; color: var(--color-text-primary); }
+.customer-contact { font-size: 11px; color: var(--color-text-secondary); margin-top: 1px; }
+
+.customer-stats { display: flex; gap: var(--space-md); margin-bottom: var(--space-sm); font-size: 11px; color: var(--color-text-secondary); }
+.customer-stats strong { color: var(--color-text-primary); font-weight: 700; }
+
+.customer-notes {
+  font-size: 11px; color: var(--color-text-secondary); font-style: italic;
+  padding: var(--space-sm); background: var(--color-cream);
+  border-radius: var(--radius-sm); margin-bottom: var(--space-sm);
+}
+
+
+/* --- Payment Summary --- */
+.payment-summary { border: var(--border-thin) solid var(--color-border); border-radius: var(--radius-md); margin-bottom: var(--space-lg); overflow: hidden; }
+
+.payment-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 13px; border-bottom: var(--border-thin) solid var(--color-cream); gap: var(--space-sm);
+}
+
+.payment-row:last-child { border-bottom: none; }
+.payment-row-label { font-size: 11px; color: var(--color-text-secondary); flex: 1; }
+.payment-row-value { font-size: 12px; font-weight: 700; color: var(--color-text-primary); white-space: nowrap; }
+
+/* Total row */
+.payment-row.total { background: var(--color-black); }
+.payment-row.total .payment-row-label { color: var(--color-grey); }
+.payment-row.total .payment-row-value { color: var(--color-white); }
+
+
+/* --- Settings --- */
+.settings-section { margin-bottom: var(--space-xl); }
+
+.settings-section-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--color-text-secondary); margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm); border-bottom: var(--border-thin) solid var(--color-border);
+}
+
+.setting-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: var(--border-thin) solid var(--color-cream); gap: var(--space-md);
+}
+
+.setting-row:last-child { border-bottom: none; }
+.setting-info  { flex: 1; }
+.setting-name  { font-size: var(--text-small); font-weight: 700; color: var(--color-text-primary); margin-bottom: 2px; }
+.setting-desc  { font-size: 11px; color: var(--color-text-secondary); }
+.setting-value { font-size: 12px; color: var(--color-text-secondary); text-align: right; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.market-setting-card { border: var(--border-thin) solid var(--color-border); border-radius: var(--radius-md); padding: 11px 13px; margin-bottom: var(--space-sm); }
+.market-setting-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); }
+.market-setting-name { font-size: var(--text-small); font-weight: 700; color: var(--color-text-primary); }
+.market-setting-fields { display: flex; flex-direction: column; gap: 4px; }
+.market-setting-field { display: flex; align-items: center; justify-content: space-between; }
+.msf-label { font-size: 10px; color: var(--color-text-secondary); }
+.msf-value { font-size: 11px; font-weight: 700; color: var(--color-text-primary); }
+
+
+/* --- Login Screen --- */
+.login-header {
+  background: var(--color-black);
+  padding: var(--space-2xl) var(--space-lg) var(--space-xl);
+  text-align: center;
+}
+
+.login-logo-mark {
+  width: 52px; height: 52px; background: var(--color-white);
+  border-radius: var(--radius-lg); display: flex; align-items: center;
+  justify-content: center; margin: 0 auto var(--space-lg);
+}
+
+.login-logo-mark svg { width: 24px; height: 24px; }
+.login-title    { font-size: 28px; font-weight: 700; color: var(--color-white); letter-spacing: -0.5px; margin-bottom: 4px; }
+.login-subtitle { font-size: 11px; color: var(--color-grey); letter-spacing: 1.5px; text-transform: uppercase; }
+
+.login-body { background: var(--color-cream); padding: var(--space-xl) var(--space-lg); min-height: calc(100vh - 160px); }
+.login-hint { font-size: 11px; color: var(--color-text-secondary); text-align: center; line-height: 1.6; margin-bottom: var(--space-lg); }
+
+
+/* --- Misc --- */
+.archive-link {
+  font-size: var(--text-label); font-weight: 700; letter-spacing: 0.8px;
+  text-transform: uppercase; color: var(--color-text-secondary);
+  text-align: center; padding: var(--space-lg) 0;
+  border-top: var(--border-thin) solid var(--color-border);
+  cursor: pointer; margin-top: var(--space-sm);
+}
+
+.search-box {
+  display: block; width: 100%; padding: 9px 11px;
+  border: var(--border-strong) solid var(--color-black);
+  border-radius: var(--radius-sm); font-size: var(--text-small);
+  color: var(--color-text-primary); background: var(--color-white);
+  margin-bottom: var(--space-md); font-family: var(--font-body);
+}
+
+.search-box:focus  { outline: none; }
+.search-box::placeholder { color: var(--color-sand); }
+
+.footer-brand { font-size: 9px; font-style: italic; color: var(--color-sand); text-align: center; padding: var(--space-xl) 0 var(--space-md); letter-spacing: 0.3px; }
+
+.loading { text-align: center; padding: var(--space-2xl) 0; font-size: var(--text-small); color: var(--color-text-secondary); letter-spacing: 1px; text-transform: uppercase; }
+.empty-state { text-align: center; padding: var(--space-2xl) 0; font-size: var(--text-small); color: var(--color-text-secondary); }
+
+
+/* =============================================================
+   6. UTILITIES
+   ============================================================= */
+.mt-sm  { margin-top: var(--space-sm); }
+.mt-md  { margin-top: var(--space-md); }
+.mt-lg  { margin-top: var(--space-lg); }
+.mb-sm  { margin-bottom: var(--space-sm); }
+.mb-md  { margin-bottom: var(--space-md); }
+.mb-lg  { margin-bottom: var(--space-lg); }
+
+.text-right  { text-align: right; }
+.text-center { text-align: center; }
+.ml-auto     { margin-left: auto; }
+
+.flex         { display: flex; }
+.flex-center  { display: flex; align-items: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.gap-sm       { gap: var(--space-sm); }
+.gap-md       { gap: var(--space-md); }
+.flex-wrap    { flex-wrap: wrap; }
+.flex-1       { flex: 1; }
+
+.hidden { display: none !important; }

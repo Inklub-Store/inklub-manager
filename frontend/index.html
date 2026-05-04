@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<!--
+  index.html — Inklub Store Manager
+  Login Screen
+
+  This is the entry point of the app. When someone opens the app URL,
+  this page loads first. It checks if they're already logged in:
+  - If yes → redirects to dashboard.html automatically
+  - If no  → shows the login form
+
+  The login check happens in auth.js via the /auth/status endpoint.
+-->
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Ensures the page renders correctly on mobile screens -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inklub — Gestión de tienda</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div class="app">
+
+    <!-- =====================================================
+         LOGIN SCREEN
+         ===================================================== -->
+    <div id="login-screen">
+
+      <!-- Black header with Inklub logo -->
+      <div class="login-header">
+        <div class="login-logo-mark">
+          <!-- Three-bar Inklub logo mark (inverted for dark background) -->
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1"  y="1" width="6" height="22" rx="1.5" fill="#111111"/>
+            <rect x="9"  y="1" width="6" height="22" rx="1.5" fill="#111111"/>
+            <rect x="17" y="1" width="6" height="22" rx="1.5" fill="#111111"/>
+          </svg>
+        </div>
+        <div class="login-title">Inklub</div>
+        <div class="login-subtitle">Gestión de tienda</div>
+      </div>
+
+      <!-- Cream body with login form -->
+      <div class="login-body">
+        <div class="form-card">
+          <div class="form-title">Acceso administrador</div>
+
+          <!-- Login form — handled by auth.js -->
+          <form id="login-form">
+            <label class="field-label" for="login-password">Contraseña</label>
+            <input
+              class="field-input"
+              type="password"
+              id="login-password"
+              placeholder="••••••••"
+              autocomplete="current-password"
+            />
+          </form>
+
+          <!-- Error message — hidden until a login attempt fails -->
+          <div id="login-error" class="hidden" style="
+            font-size: 11px;
+            color: #888888;
+            margin-top: -8px;
+            margin-bottom: 12px;
+          "></div>
+
+          <!-- Submit button -->
+          <button class="btn btn-primary btn-full" id="login-submit">
+            Entrar
+          </button>
+        </div>
+
+        <div class="login-hint">
+          Solo tú tienes acceso a este panel.<br>
+          Si olvidaste la contraseña, contacta a Alberto.
+        </div>
+
+        <div class="footer-brand">Elevate your style.</div>
+      </div>
+
+    </div>
+    <!-- end #login-screen -->
+
+  </div>
+  <!-- end .app -->
+
+  <!--
+    auth.js is loaded as a module — this enables ES module imports
+    (import/export syntax used across all JS files).
+    The initAuth() function checks login status and handles the form.
+  -->
+  <script type="module">
+    import { initAuth } from './js/auth.js';
+
+    // Run as soon as the page loads
+    document.addEventListener('DOMContentLoaded', () => {
+      initAuth();
+    });
+
+    // If already logged in, redirect to the dashboard
+    // This is handled inside auth.js — it redirects to dashboard.html
+  </script>
+
+</body>
+</html>
