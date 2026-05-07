@@ -1,16 +1,9 @@
 # =============================================================
 # routes/dashboard.py — Dashboard Summary Routes
 # =============================================================
-# Returns all data needed for the Inicio screen:
-#   - Stat cards (open orders, revenue, ready, low stock)
-#   - Low stock alert items
-#   - Unpaid orders list (for payment summary section)
-#   - Recent orders (for the preview cards at the bottom)
-#   - Total pending collection amount
-#
-# FIX: Added unpaid_orders, recent_orders, and total_pending
-# fields that the frontend dashboard.js expects but were missing
-# from the original version of this file.
+# Updated: Added total_items count for the simplified Inicio screen.
+# Since orders are managed in Trello, the dashboard now focuses
+# purely on inventory health.
 # =============================================================
 
 from flask import Blueprint, jsonify
@@ -20,20 +13,12 @@ from routes.auth import require_auth
 dashboard_bp = Blueprint("dashboard", __name__)
 
 
-# -------------------------------------------------------------
-# GET /api/dashboard/<market_id>
-# -------------------------------------------------------------
-# Returns all summary stats for one market.
-# <market_id> is either 'ca' or 'pa'.
-# -------------------------------------------------------------
 @dashboard_bp.route("/<market_id>", methods=["GET"])
 @require_auth
 def get_dashboard(market_id):
     with get_db() as conn:
 
-        # --- Open orders (not yet delivered) ---
-        # Also counts how many are unpaid so the stat card can show
-        # "7 pedidos / 3 sin pagar" in one query instead of two.
+        # --- Open orders (kept for potential future use) ---
         open_orders = conn.execute("""
             SELECT COUNT(*) AS total,
                    COUNT(*) FILTER (WHERE payment_status = 'unpaid') AS unpaid
@@ -43,9 +28,6 @@ def get_dashboard(market_id):
         """, (market_id,)).fetchone()
 
         # --- Revenue this calendar month ---
-        # EXTRACT pulls the month and year from created_at.
-        # We only count paid orders so unpaid don't inflate the number.
-        # COALESCE returns 0 if there are no paid orders yet this month.
         revenue = conn.execute("""
             SELECT COALESCE(SUM(total_price), 0) AS total
             FROM orders
@@ -56,7 +38,6 @@ def get_dashboard(market_id):
         """, (market_id,)).fetchone()
 
         # --- Orders ready to ship ---
-        # Production is done but not yet delivered to the customer.
         ready = conn.execute("""
             SELECT COUNT(*) AS total
             FROM orders
@@ -65,8 +46,7 @@ def get_dashboard(market_id):
         """, (market_id,)).fetchone()
 
         # --- Low stock alerts ---
-        # Returns items where quantity is at or below the threshold she set.
-        # Ordered by quantity ascending so the most urgent items appear first.
+        # Items at or below their threshold, ordered most urgent first
         low_stock = conn.execute("""
             SELECT i.id, i.name, i.quantity, i.threshold,
                    c.label AS category, c.unit
@@ -77,9 +57,15 @@ def get_dashboard(market_id):
             ORDER BY i.quantity ASC
         """, (market_id,)).fetchall()
 
-        # --- Unpaid orders (for the payment summary section) ---
-        # Shows who owes money so she can see the total pending collection
-        # at a glance. Only active (non-delivered) orders are included.
+        # --- Total inventory items for this market ---
+        # Used on the simplified Inicio screen stat card
+        total_items = conn.execute("""
+            SELECT COUNT(*) AS total
+            FROM inventory
+            WHERE market_id = %s
+        """, (market_id,)).fetchone()
+
+        # --- Unpaid orders (for potential future use) ---
         unpaid_orders = conn.execute("""
             SELECT id, customer_name, product, total_price
             FROM orders
@@ -90,8 +76,6 @@ def get_dashboard(market_id):
         """, (market_id,)).fetchall()
 
         # --- Total pending collection ---
-        # Sum of all unpaid active orders — shown in the "Total por cobrar"
-        # row at the bottom of the payment summary block on the dashboard.
         total_pending = conn.execute("""
             SELECT COALESCE(SUM(total_price), 0) AS total
             FROM orders
@@ -100,9 +84,7 @@ def get_dashboard(market_id):
               AND production_status != 'delivered'
         """, (market_id,)).fetchone()
 
-        # --- Recent orders (latest 3 active orders for the preview cards) ---
-        # Joins markets to include the currency label (e.g. CAD, PAB/USD)
-        # so the frontend can display "$60 CAD" without a separate API call.
+        # --- Recent orders ---
         recent_orders = conn.execute("""
             SELECT o.*, m.currency
             FROM orders o
@@ -114,7 +96,6 @@ def get_dashboard(market_id):
         """, (market_id,)).fetchall()
 
         # --- Market info ---
-        # Currency, payment method, flag — used for display labels in the UI.
         market = conn.execute("""
             SELECT * FROM markets WHERE id = %s
         """, (market_id,)).fetchone()
@@ -127,7 +108,8 @@ def get_dashboard(market_id):
         "ready":           ready["total"],
         "low_stock_count": len(low_stock),
         "low_stock_items": list(low_stock),
-        "unpaid_orders":   list(unpaid_orders),           # For payment summary
-        "total_pending":   float(total_pending["total"]), # Total por cobrar
-        "recent_orders":   list(recent_orders),           # For preview cards
+        "total_items":     total_items["total"],   # New — for Inicio stat card
+        "unpaid_orders":   list(unpaid_orders),
+        "total_pending":   float(total_pending["total"]),
+        "recent_orders":   list(recent_orders),
     }), 200

@@ -15,9 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from routes.dashboard  import dashboard_bp
-from routes.orders     import orders_bp
 from routes.inventory  import inventory_bp
-from routes.customers  import customers_bp
 from routes.settings   import settings_bp
 from routes.public     import public_bp
 from routes.auth       import auth_bp
@@ -38,9 +36,7 @@ def create_app():
 
     app.register_blueprint(auth_bp,       url_prefix="/auth")
     app.register_blueprint(dashboard_bp,  url_prefix="/api/dashboard")
-    app.register_blueprint(orders_bp,     url_prefix="/api/orders")
     app.register_blueprint(inventory_bp,  url_prefix="/api/inventory")
-    app.register_blueprint(customers_bp,  url_prefix="/api/customers")
     app.register_blueprint(settings_bp,   url_prefix="/api/settings")
     app.register_blueprint(public_bp,     url_prefix="/order")
 

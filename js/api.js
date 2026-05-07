@@ -122,32 +122,6 @@ export async function getDashboard(marketId) {
   return request('GET', `/api/dashboard/${marketId}`);
 }
 
-
-// =============================================================
-// ORDERS
-// =============================================================
-
-export async function getOrders(marketId) {
-  return request('GET', `/api/orders/${marketId}`);
-}
-
-export async function getOrderArchive(marketId) {
-  return request('GET', `/api/orders/${marketId}/archive`);
-}
-
-export async function createOrder(orderData) {
-  return request('POST', '/api/orders', orderData);
-}
-
-export async function updateOrderStatus(orderId, statusData) {
-  return request('PATCH', `/api/orders/${orderId}/status`, statusData);
-}
-
-export async function deleteOrder(orderId) {
-  return request('DELETE', `/api/orders/${orderId}`);
-}
-
-
 // =============================================================
 // INVENTORY
 // =============================================================
@@ -184,24 +158,6 @@ export async function addCategory(categoryData) {
 export async function deleteCategory(categoryId) {
   return request('DELETE', `/api/inventory/categories/${categoryId}`);
 }
-
-
-// =============================================================
-// CUSTOMERS
-// =============================================================
-
-export async function getCustomers(marketId) {
-  return request('GET', `/api/customers/${marketId}`);
-}
-
-export async function getCustomerOrders(customerId) {
-  return request('GET', `/api/customers/${customerId}/orders`);
-}
-
-export async function updateCustomerNotes(customerId, notes) {
-  return request('PATCH', `/api/customers/${customerId}/notes`, { notes });
-}
-
 
 // =============================================================
 // SETTINGS
