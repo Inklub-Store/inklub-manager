@@ -11,7 +11,6 @@
 import { getDashboard } from './api.js';
 import { setupLogoutButton } from './auth.js';
 import { initInventory } from './inventory.js';
-import { initCustomers } from './customers.js';
 import { initSettings } from './settings.js';
 
 
@@ -134,7 +133,6 @@ function loadScreen(screenName) {
   switch (screenName) {
     case 'inicio': loadInicio(); break;
     case 'inventario': initInventory(state.market); break;
-    case 'clientes': initCustomers(state.market); break;
     case 'settings': initSettings(); break;
   }
 }
