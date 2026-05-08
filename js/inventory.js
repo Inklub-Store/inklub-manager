@@ -6,15 +6,22 @@
 //   - Loading and displaying inventory items
 //   - Category filter chips
 //   - Adding new categories dynamically
-//   - Updating item quantities
+//   - Adding new items (regular units OR vinyl rolls)
+//   - Updating item quantities / remaining inches
 //   - Updating minimum stock thresholds
-//   - Adding and deleting items
+//   - Deleting items and categories
 //
-// FIX: Cancel button in add item form now correctly calls
-// window._invCancel instead of window.initInventory, which
-// was never exposed as a global and caused a silent failure.
-// Also added currentMarket variable so all handlers always
-// know which market is active without needing it passed in.
+// VINYL ROLL SUPPORT:
+// Items in categories with tracking_type = 'roll' are displayed
+// and edited differently from regular unit items:
+//   - Display: "85in / 120in" instead of "10 units"
+//   - Add form: shows roll-specific fields (color, total, remaining)
+//   - Edit prompt: asks for remaining inches instead of quantity
+//   - Bar fill: based on remaining/total percentage
+//   - Minimum: shown in inches instead of units
+//
+// The add form detects the category type automatically and
+// switches between regular and roll fields dynamically.
 // =============================================================
 
 import {
@@ -24,17 +31,17 @@ import {
 } from './api.js';
 
 
-// Track the active category filter (null = show all categories)
+// Track the active category filter (null = show all)
 let activeCategory = null;
 
-// Store categories so we can use them in forms without re-fetching
+// Store categories so forms can use them without re-fetching
 let currentCategories = [];
 
 // Store items for filtering without re-fetching
 let currentItems = [];
 
-// Track the current market so cancel buttons and back buttons
-// always know which market to return to without it being passed in
+// Track the current market so cancel/back buttons always
+// know which market to return to
 let currentMarket = null;
 
 
@@ -42,13 +49,13 @@ let currentMarket = null;
 // initInventory(marketId)
 // -------------------------------------------------------------
 // Entry point for the Inventario screen.
-// Loads both categories and items in parallel for speed.
+// Loads categories and items in parallel for speed.
 // Called by dashboard.js whenever this screen is shown
 // or the market toggle changes.
 // -------------------------------------------------------------
 export async function initInventory(marketId) {
   activeCategory = null;
-  currentMarket = marketId;  // Store so cancel buttons can use it
+  currentMarket = marketId;
 
   const container = document.getElementById('screen-inventario');
   if (!container) return;
@@ -56,7 +63,7 @@ export async function initInventory(marketId) {
   container.innerHTML = '<div class="loading">Cargando inventario...</div>';
 
   try {
-    // Promise.all loads both at the same time — faster than two sequential calls
+    // Promise.all loads both at the same time — faster than sequential calls
     [currentCategories, currentItems] = await Promise.all([
       getCategories(),
       getInventory(marketId)
@@ -73,17 +80,27 @@ export async function initInventory(marketId) {
 // -------------------------------------------------------------
 // renderInventoryScreen(marketId)
 // -------------------------------------------------------------
-// Builds the full inventory screen HTML and injects it into
-// the screen container. Called after data loads and after
-// any update (quantity change, new item, etc.).
+// Builds the full inventory screen HTML and injects it.
+// Called after data loads and after any update.
+// Handles both regular items and vinyl roll items in the same list.
 // -------------------------------------------------------------
 function renderInventoryScreen(marketId) {
   currentMarket = marketId;
   const container = document.getElementById('screen-inventario');
 
-  // Count items with stock issues for the alert banner
-  const lowStockItems = currentItems.filter(i => i.quantity > 0 && i.quantity <= i.threshold);
-  const outOfStockItems = currentItems.filter(i => i.quantity === 0);
+  // Count stock issues — roll items use remaining_inches vs threshold,
+  // regular items use quantity vs threshold
+  const lowStockItems = currentItems.filter(i => {
+    if (i.tracking_type === 'roll') {
+      return i.remaining_inches > 0 && i.remaining_inches <= i.threshold;
+    }
+    return i.quantity > 0 && i.quantity <= i.threshold;
+  });
+
+  const outOfStockItems = currentItems.filter(i => {
+    if (i.tracking_type === 'roll') return (i.remaining_inches || 0) === 0;
+    return i.quantity === 0;
+  });
 
   // Build the alert banner — only shown if there are stock issues
   const alertHTML = (lowStockItems.length > 0 || outOfStockItems.length > 0) ? `
@@ -96,12 +113,12 @@ function renderInventoryScreen(marketId) {
     </div>
   ` : '';
 
-  // Filter items based on the active category chip
+  // Filter items by the active category chip
   const filteredItems = activeCategory
     ? currentItems.filter(i => i.category_id === activeCategory)
     : currentItems;
 
-  // Build category filter chips — one per category from the database
+  // Build category filter chips — one per category
   const allChipActive = activeCategory === null ? 'active' : '';
   const categoryChipsHTML = currentCategories.map(cat => `
     <button class="btn btn-filter ${activeCategory === cat.id ? 'active' : ''}"
@@ -110,12 +127,10 @@ function renderInventoryScreen(marketId) {
     </button>
   `).join('');
 
-  // Build the items list or empty state
   const itemsHTML = filteredItems.length > 0
     ? filteredItems.map(item => renderInventoryCard(item, marketId)).join('')
     : '<div class="empty-state">No hay productos en esta categoría.</div>';
 
-  // Section title changes based on the active filter
   const activeCatLabel = activeCategory
     ? currentCategories.find(c => c.id === activeCategory)?.label || 'Productos'
     : 'Todos los productos';
@@ -140,16 +155,15 @@ function renderInventoryScreen(marketId) {
     <div class="footer-brand">Elevate your style.</div>
   `;
 
-  // Expose all action handlers on window so onclick attributes in the
-  // injected HTML can call them (module functions aren't global by default)
+  // Expose all action handlers on window so onclick attributes
+  // in the injected HTML can call them (module functions aren't global)
   window._invSetCategory = (catId, market) => { activeCategory = catId; renderInventoryScreen(market); };
   window._invShowAddCategory = (market) => showAddCategoryForm(market);
   window._invShowAddItem = (market) => showAddItemForm(market);
-  window._invUpdateQty = (itemId, market) => showUpdateQuantityForm(itemId, market);
+  window._invUpdateQty = (itemId, market) => showUpdateStockForm(itemId, market);
   window._invUpdateMin = (itemId, market) => showUpdateThresholdForm(itemId, market);
   window._invDeleteItem = (itemId, market) => handleDeleteItem(itemId, market);
-  // Fixed: cancel button calls this instead of window.initInventory
-  // which was never exposed as a global
+  // Cancel button handler — returns to inventory list
   window._invCancel = (market) => initInventory(market);
 }
 
@@ -157,29 +171,72 @@ function renderInventoryScreen(marketId) {
 // -------------------------------------------------------------
 // renderInventoryCard(item, marketId)
 // -------------------------------------------------------------
-// Returns the HTML string for a single inventory item card.
-// Stock status (ok/low/out) determines dot color, bar fill,
-// and card background.
+// Returns the HTML for a single inventory card.
+// Renders differently based on tracking_type:
+//
+// 'roll' items show:
+//   - "85in / 120in" quantity display
+//   - Bar fill based on remaining/total percentage
+//   - Roll color badge
+//   - "Actualizar rollo" button label
+//   - Minimum shown in inches
+//
+// 'units' items show:
+//   - "10 units" quantity display
+//   - Bar fill based on qty vs threshold*3
+//   - "Editar stock" button label
+//   - Minimum shown in units
 // -------------------------------------------------------------
 function renderInventoryCard(item, marketId) {
-  // Determine stock status based on quantity vs threshold
+  const isRoll = item.tracking_type === 'roll';
+
+  // --- Determine stock status ---
   let status;
-  if (item.quantity === 0) status = 'out';
-  else if (item.quantity <= item.threshold) status = 'low';
-  else status = 'ok';
+  if (isRoll) {
+    const remaining = item.remaining_inches || 0;
+    if (remaining === 0) status = 'out';
+    else if (remaining <= item.threshold) status = 'low';
+    else status = 'ok';
+  } else {
+    if (item.quantity === 0) status = 'out';
+    else if (item.quantity <= item.threshold) status = 'low';
+    else status = 'ok';
+  }
 
-  // Calculate bar fill percentage.
-  // We use threshold * 3 as the "full" reference point so the bar
-  // makes visual sense even for items with small max quantities.
-  const maxRef = Math.max(item.threshold * 3, item.quantity);
-  const fillPct = maxRef > 0 ? Math.min(Math.round((item.quantity / maxRef) * 100), 100) : 0;
+  // --- Calculate progress bar fill percentage ---
+  let fillPct;
+  if (isRoll) {
+    // For rolls: remaining / total * 100
+    const total = item.total_inches || 0;
+    const remaining = item.remaining_inches || 0;
+    fillPct = total > 0 ? Math.min(Math.round((remaining / total) * 100), 100) : 0;
+  } else {
+    // For regular items: qty / (threshold * 3) as a reference max
+    const maxRef = Math.max(item.threshold * 3, item.quantity);
+    fillPct = maxRef > 0 ? Math.min(Math.round((item.quantity / maxRef) * 100), 100) : 0;
+  }
 
-  // Card gets extra styling for warning/out-of-stock states
+  // --- Build quantity display label ---
+  const qtyDisplay = isRoll
+    ? `${item.remaining_inches || 0}in / ${item.total_inches || 0}in`
+    : `${item.quantity} ${item.unit}`;
+
+  // --- Build minimum display label ---
+  const minDisplay = isRoll
+    ? `${item.threshold} in`
+    : `${item.threshold} ${item.unit}`;
+
+  // --- Card CSS class based on stock status ---
   const cardClass = status === 'out'
     ? 'card out-of-stock'
     : status === 'low'
       ? 'card warning'
       : 'card';
+
+  // --- Roll color badge (only for vinyl roll items) ---
+  const colorLabel = isRoll && item.roll_color
+    ? `<span class="inv-category" style="margin-left:4px;">${item.roll_color}</span>`
+    : '';
 
   return `
     <div class="${cardClass}" id="inv-${item.id}">
@@ -187,24 +244,25 @@ function renderInventoryCard(item, marketId) {
         <div class="inv-dot ${status}"></div>
         <span class="inv-name">${item.name}</span>
         <span class="inv-category">${item.category_label}</span>
+        ${colorLabel}
       </div>
 
       <div class="inv-bar-row">
         <div class="inv-bar-track">
           <div class="inv-bar-fill ${status}" style="width: ${fillPct}%"></div>
         </div>
-        <span class="inv-qty">${item.quantity} ${item.unit}</span>
+        <span class="inv-qty">${qtyDisplay}</span>
       </div>
 
       <div class="inv-minimum-row">
         <span class="inv-minimum-label">Mínimo:</span>
-        <span class="inv-minimum-value">${item.threshold} ${item.unit}</span>
+        <span class="inv-minimum-value">${minDisplay}</span>
       </div>
 
       <div class="card-actions">
         <button class="btn btn-primary"
                 onclick="window._invUpdateQty(${item.id}, '${marketId}')">
-          Editar stock
+          ${isRoll ? 'Actualizar rollo' : 'Editar stock'}
         </button>
         <button class="btn btn-secondary"
                 onclick="window._invUpdateMin(${item.id}, '${marketId}')">
@@ -221,37 +279,61 @@ function renderInventoryCard(item, marketId) {
 
 
 // -------------------------------------------------------------
-// showUpdateQuantityForm(itemId, marketId)
+// showUpdateStockForm(itemId, marketId)
 // -------------------------------------------------------------
-// Shows a browser prompt to update the quantity of an item.
-// We use the native prompt() for simplicity — it works on mobile
-// without needing a custom modal component.
+// Shows a prompt to update stock.
+// For roll items: asks for remaining inches
+// For regular items: asks for new quantity
+// Uses native browser prompt() for simplicity — works on mobile
+// without needing a custom modal.
 // -------------------------------------------------------------
-async function showUpdateQuantityForm(itemId, marketId) {
+async function showUpdateStockForm(itemId, marketId) {
   const item = currentItems.find(i => i.id === itemId);
   if (!item) return;
 
-  const newQty = prompt(
-    `Actualizar stock de "${item.name}"\nCantidad actual: ${item.quantity} ${item.unit}\n\nNueva cantidad:`,
-    item.quantity
-  );
+  const isRoll = item.tracking_type === 'roll';
+  let newValue;
 
-  // User cancelled or entered nothing
-  if (newQty === null || newQty === '') return;
+  if (isRoll) {
+    // For rolls, ask how many inches remain after the latest use
+    newValue = prompt(
+      `Actualizar rollo "${item.name}"\n` +
+      `Total del rollo: ${item.total_inches}in\n` +
+      `Restante actual: ${item.remaining_inches}in\n\n` +
+      `¿Cuántas pulgadas quedan ahora?`,
+      item.remaining_inches
+    );
+  } else {
+    newValue = prompt(
+      `Actualizar stock de "${item.name}"\n` +
+      `Cantidad actual: ${item.quantity} ${item.unit}\n\n` +
+      `Nueva cantidad:`,
+      item.quantity
+    );
+  }
 
-  const quantity = parseInt(newQty);
-  if (isNaN(quantity) || quantity < 0) {
+  // User cancelled — null means they pressed Cancel
+  if (newValue === null || newValue === '') return;
+
+  const parsed = parseFloat(newValue);
+  if (isNaN(parsed) || parsed < 0) {
     alert('Por favor ingresa un número válido (0 o más).');
     return;
   }
 
   try {
-    await updateItemQuantity(itemId, quantity);
-    // Reload the full inventory screen to reflect the change
+    if (isRoll) {
+      // Pass remaining_inches for roll items
+      await updateItemQuantity(itemId, null, parsed);
+    } else {
+      // Pass quantity for regular items
+      await updateItemQuantity(itemId, parsed);
+    }
+    // Reload to reflect the updated values
     await initInventory(marketId);
   } catch (error) {
-    alert('Error al actualizar el stock. Inténtalo de nuevo.');
-    console.error('Update quantity error:', error);
+    alert('Error al actualizar. Inténtalo de nuevo.');
+    console.error('Update stock error:', error);
   }
 }
 
@@ -260,22 +342,29 @@ async function showUpdateQuantityForm(itemId, marketId) {
 // showUpdateThresholdForm(itemId, marketId)
 // -------------------------------------------------------------
 // Shows a prompt to update the minimum stock threshold.
-// When quantity drops to or below this number, an alert email is sent.
+// For roll items the threshold is in inches.
+// For regular items it's in units.
+// An email alert is sent when stock drops to or below this value.
 // -------------------------------------------------------------
 async function showUpdateThresholdForm(itemId, marketId) {
   const item = currentItems.find(i => i.id === itemId);
   if (!item) return;
 
+  const isRoll = item.tracking_type === 'roll';
+  const unit = isRoll ? 'pulgadas' : item.unit;
+
   const newThreshold = prompt(
-    `Mínimo de "${item.name}"\nMínimo actual: ${item.threshold} ${item.unit}\n\nNuevo mínimo (recibirás una alerta cuando llegues a este número):`,
+    `Mínimo de "${item.name}"\n` +
+    `Mínimo actual: ${item.threshold} ${unit}\n\n` +
+    `Nuevo mínimo (recibirás una alerta cuando llegues a este número):`,
     item.threshold
   );
 
   if (newThreshold === null || newThreshold === '') return;
 
-  const threshold = parseInt(newThreshold);
+  const threshold = parseFloat(newThreshold);
   if (isNaN(threshold) || threshold < 0) {
-    alert('Por favor ingresa un número válido (0 o más).');
+    alert('Por favor ingresa un número válido.');
     return;
   }
 
@@ -293,15 +382,22 @@ async function showUpdateThresholdForm(itemId, marketId) {
 // showAddItemForm(marketId)
 // -------------------------------------------------------------
 // Replaces the inventory screen with a form to add a new item.
-// The cancel button uses window._invCancel which correctly
-// calls initInventory() to go back.
+//
+// The form dynamically shows different fields based on the
+// selected category's tracking_type:
+//   - 'units' → shows quantity + threshold fields
+//   - 'roll'  → shows color, total inches, remaining, threshold
+//
+// The switch happens in real time via the onchange handler on
+// the category select — window._invCategoryChanged().
 // -------------------------------------------------------------
 function showAddItemForm(marketId) {
   const container = document.getElementById('screen-inventario');
 
-  // Build category options for the select dropdown
+  // Build category options — embed tracking_type as data attribute
+  // so the JS can read it when the user selects a category
   const categoryOptionsHTML = currentCategories.map(cat =>
-    `<option value="${cat.id}">${cat.label} (${cat.unit})</option>`
+    `<option value="${cat.id}" data-type="${cat.tracking_type}">${cat.label}</option>`
   ).join('');
 
   container.innerHTML = `
@@ -309,26 +405,61 @@ function showAddItemForm(marketId) {
       <div class="form-title">Nuevo producto</div>
 
       <label class="field-label">Categoría</label>
-      <select class="field-input" id="new-item-category">
+      <select class="field-input" id="new-item-category"
+              onchange="window._invCategoryChanged()">
         ${categoryOptionsHTML}
       </select>
 
-      <label class="field-label">Nombre del producto</label>
+      <label class="field-label">Nombre</label>
       <input class="field-input" id="new-item-name"
-             placeholder="Ej. Vinilo — dorado" />
+             placeholder="Ej. T-shirt Blanca, Vinilo Negro Rollo 1" />
 
-      <div class="field-row">
-        <div>
-          <label class="field-label">Cantidad inicial</label>
-          <input class="field-input" id="new-item-qty"
-                 type="number" min="0" value="0" />
-        </div>
-        <div>
-          <label class="field-label">Mínimo (alerta)</label>
-          <input class="field-input" id="new-item-threshold"
-                 type="number" min="0" value="5" />
+      <!-- Regular unit fields — shown for non-roll categories -->
+      <div id="regular-fields">
+        <div class="field-row">
+          <div>
+            <label class="field-label">Cantidad inicial</label>
+            <input class="field-input" id="new-item-qty"
+                   type="number" min="0" value="0" />
+          </div>
+          <div>
+            <label class="field-label">Mínimo (unidades)</label>
+            <input class="field-input" id="new-item-threshold"
+                   type="number" min="0" value="5" />
+          </div>
         </div>
       </div>
+
+      <!-- Vinyl roll fields — shown when a roll category is selected -->
+      <div id="roll-fields" style="display:none;">
+        <label class="field-label">Color del rollo</label>
+        <input class="field-input" id="new-roll-color"
+               placeholder="Ej. Negro, Rojo, Blanco, Dorado" />
+
+        <div class="field-row">
+          <div>
+            <label class="field-label">Largo total (pulgadas)</label>
+            <input class="field-input" id="new-roll-total"
+                   type="number" min="0" step="0.5"
+                   placeholder="Ej. 120" />
+          </div>
+          <div>
+            <label class="field-label">Restante actual (in)</label>
+            <input class="field-input" id="new-roll-remaining"
+                   type="number" min="0" step="0.5"
+                   placeholder="Igual al total si es nuevo" />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div>
+            <label class="field-label">Mínimo (pulgadas)</label>
+            <input class="field-input" id="new-roll-threshold"
+                   type="number" min="0" value="12" />
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <div class="flex gap-sm mt-md">
@@ -343,12 +474,33 @@ function showAddItemForm(marketId) {
     </div>
   `;
 
-  // Save handler — reads the form values and calls the API
+  // -------------------------------------------------------------
+  // _invCategoryChanged — toggles roll vs regular fields
+  // -------------------------------------------------------------
+  // Reads the data-type attribute of the selected option and
+  // shows/hides the appropriate field groups.
+  // -------------------------------------------------------------
+  window._invCategoryChanged = () => {
+    const select = document.getElementById('new-item-category');
+    const selected = select.options[select.selectedIndex];
+    const isRoll = selected.dataset.type === 'roll';
+
+    document.getElementById('regular-fields').style.display = isRoll ? 'none' : 'block';
+    document.getElementById('roll-fields').style.display = isRoll ? 'block' : 'none';
+  };
+
+  // Trigger on load to set the correct initial state
+  window._invCategoryChanged();
+
+  // -------------------------------------------------------------
+  // _invSaveNewItem — reads the form and calls the API
+  // -------------------------------------------------------------
   window._invSaveNewItem = async (market) => {
-    const categoryId = parseInt(document.getElementById('new-item-category').value);
+    const select = document.getElementById('new-item-category');
+    const selected = select.options[select.selectedIndex];
+    const categoryId = parseInt(select.value);
+    const isRoll = selected.dataset.type === 'roll';
     const name = document.getElementById('new-item-name').value.trim();
-    const quantity = parseInt(document.getElementById('new-item-qty').value) || 0;
-    const threshold = parseInt(document.getElementById('new-item-threshold').value) || 5;
 
     if (!name) {
       alert('El nombre del producto es obligatorio.');
@@ -356,15 +508,45 @@ function showAddItemForm(marketId) {
     }
 
     try {
-      await addInventoryItem({
-        market_id: market,
-        category_id: categoryId,
-        name,
-        quantity,
-        threshold
-      });
-      // Return to the inventory list after saving
+      if (isRoll) {
+        // --- Vinyl roll save ---
+        const totalInches = parseFloat(document.getElementById('new-roll-total').value) || 0;
+        const remainingInches = parseFloat(document.getElementById('new-roll-remaining').value) || totalInches;
+        const threshold = parseFloat(document.getElementById('new-roll-threshold').value) || 12;
+        const rollColor = document.getElementById('new-roll-color').value.trim();
+
+        if (totalInches === 0) {
+          alert('El largo total del rollo es obligatorio.');
+          return;
+        }
+
+        await addInventoryItem({
+          market_id: market,
+          category_id: categoryId,
+          name,
+          roll_color: rollColor,
+          total_inches: totalInches,
+          remaining_inches: remainingInches,
+          threshold
+        });
+
+      } else {
+        // --- Regular item save ---
+        const quantity = parseInt(document.getElementById('new-item-qty').value) || 0;
+        const threshold = parseInt(document.getElementById('new-item-threshold').value) || 5;
+
+        await addInventoryItem({
+          market_id: market,
+          category_id: categoryId,
+          name,
+          quantity,
+          threshold
+        });
+      }
+
+      // Return to inventory list after saving
       await initInventory(market);
+
     } catch (error) {
       alert('Error al guardar el producto.');
       console.error('Add item error:', error);
@@ -376,22 +558,38 @@ function showAddItemForm(marketId) {
 // -------------------------------------------------------------
 // showAddCategoryForm(marketId)
 // -------------------------------------------------------------
-// Uses browser prompts to collect the category name and unit.
-// No custom modal needed — keeps things simple for a first version.
+// Uses browser prompts to collect the category name and type.
+// Asks if it's a vinyl roll category — if yes, sets tracking_type
+// to 'roll' and unit to 'in'. Otherwise uses units.
 // -------------------------------------------------------------
 async function showAddCategoryForm(marketId) {
   const label = prompt('Nombre de la nueva categoría:\n(Ej. Gorras, Ornamentos, Tote bags...)');
   if (!label || !label.trim()) return;
 
-  const unit = prompt(
-    `Unidad para "${label.trim()}":\n(Ej. units, pcs, sheets, pairs)\n\nEscribe la unidad:`,
-    'units'
+  // Ask if this is a vinyl roll category
+  // confirm() returns true for OK, false for Cancel
+  const isRoll = confirm(
+    `¿"${label.trim()}" es una categoría de rollos de vinilo?\n\n` +
+    `OK = Sí, se trackea por pulgadas\n` +
+    `Cancelar = No, se trackea por unidades`
   );
-  if (!unit) return;
+
+  let unit;
+  if (!isRoll) {
+    unit = prompt(
+      `Unidad para "${label.trim()}":\n(Ej. units, pcs, pairs)`,
+      'units'
+    );
+    if (!unit) return;
+  }
 
   try {
-    await addCategory({ label: label.trim(), unit: unit.trim() });
-    // Reload the screen so the new category chip appears
+    await addCategory({
+      label: label.trim(),
+      unit: isRoll ? 'in' : unit.trim(),
+      tracking_type: isRoll ? 'roll' : 'units'
+    });
+    // Reload so the new category chip appears immediately
     await initInventory(marketId);
   } catch (error) {
     if (error.message.includes('already exists')) {
@@ -421,32 +619,5 @@ async function handleDeleteItem(itemId, marketId) {
   } catch (error) {
     alert('Error al eliminar el producto.');
     console.error('Delete item error:', error);
-  }
-}
-
-
-// -------------------------------------------------------------
-// handleDeleteCategory(categoryId, marketId)
-// -------------------------------------------------------------
-// Deletes a category. The backend will reject this if any
-// inventory items still use the category — we show a helpful
-// error message in that case.
-// -------------------------------------------------------------
-async function handleDeleteCategory(categoryId, marketId) {
-  const cat = currentCategories.find(c => c.id === categoryId);
-  const name = cat ? cat.label : 'esta categoría';
-
-  if (!confirm(`¿Segura que quieres eliminar "${name}"?\n\nSolo puedes eliminarla si no tiene productos asignados.`)) return;
-
-  try {
-    await deleteCategory(categoryId);
-    await initInventory(marketId);
-  } catch (error) {
-    if (error.message.includes('Cannot delete')) {
-      alert('No puedes eliminar esta categoría porque tiene productos asignados. Elimina o mueve los productos primero.');
-    } else {
-      alert('Error al eliminar la categoría.');
-    }
-    console.error('Delete category error:', error);
   }
 }

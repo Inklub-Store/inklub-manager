@@ -135,8 +135,14 @@ export async function addInventoryItem(itemData) {
   return request('POST', '/api/inventory', itemData);
 }
 
-export async function updateItemQuantity(itemId, quantity) {
-  return request('PATCH', `/api/inventory/${itemId}/quantity`, { quantity });
+// Update the quantity of an inventory item (e.g. after restocking).
+// For regular items: pass quantity
+// For vinyl rolls: pass null as quantity and remainingInches as the third argument
+export async function updateItemQuantity(itemId, quantity, remainingInches = null) {
+  const body = remainingInches !== null
+    ? { remaining_inches: remainingInches }
+    : { quantity };
+  return request('PATCH', `/api/inventory/${itemId}/quantity`, body);
 }
 
 export async function updateItemThreshold(itemId, threshold) {
