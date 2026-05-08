@@ -195,7 +195,7 @@ def process_deductions(market_id, card_id, card_name, description, webhook_event
 
             # Check if there's enough stock
             if unit == 'inches':
-                current = inv_item['remaining_inches'] or 0
+                current = float(inv_item['remaining_inches'] or 0)
                 if current < quantity:
                     error_msg = (
                         f'Not enough inches on "{inv_item["name"]}" — '
@@ -207,7 +207,7 @@ def process_deductions(market_id, card_id, card_name, description, webhook_event
                     quantity = current
 
                 # Deduct from remaining_inches
-                new_remaining = max(0, current - quantity)
+                new_remaining = max(0, float(current) - float(quantity))
                 conn.execute("""
                     UPDATE inventory
                     SET remaining_inches = %s,
